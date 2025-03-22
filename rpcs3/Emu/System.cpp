@@ -753,84 +753,6 @@ void Emulator::SetUsr(const std::string& user)
 	m_usr = user;
 }
 
-std::string Emulator::GetBackgroundPicturePath() const
-{
-	// Try to find a custom icon first
-	std::string path = fs::get_config_dir() + "/Icons/game_icons/" + GetTitleID() + "/PIC1.PNG";
-
-	if (fs::is_file(path))
-	{
-		return path;
-	}
-
-	std::string disc_dir = vfs::get("/dev_bdvd/PS3_GAME");
-
-	if (m_sfo_dir == disc_dir)
-	{
-		disc_dir.clear();
-	}
-
-	constexpr auto search_barrier = "barrier";
-
-	std::initializer_list<std::string> testees =
-	{
-		m_sfo_dir + "/PIC0.PNG",
-		m_sfo_dir + "/PIC1.PNG",
-		m_sfo_dir + "/PIC2.PNG",
-		m_sfo_dir + "/PIC3.PNG",
-		search_barrier,
-		!disc_dir.empty() ? (disc_dir + "/PIC0.PNG") : disc_dir,
-		!disc_dir.empty() ? (disc_dir + "/PIC1.PNG") : disc_dir,
-		!disc_dir.empty() ? (disc_dir + "/PIC2.PNG") : disc_dir,
-		!disc_dir.empty() ? (disc_dir + "/PIC3.PNG") : disc_dir,
-		search_barrier,
-		m_sfo_dir + "/ICON0.PNG",
-		search_barrier,
-		!disc_dir.empty() ? (disc_dir + "/ICON0.PNG") : disc_dir,
-	};
-
-	// Try to return the picture with the highest resultion
-	// Be naive and assume that its the one that spans over the most bytes
-	usz max_file_size = 0;
-	usz index_of_largest_file = umax;
-
-	for (usz index = 0; index < testees.size(); index++)
-	{
-		const std::string& path = testees.begin()[index];
-
-		fs::stat_t file_stat{};
-
-		if (path == search_barrier)
-		{
-			if (index_of_largest_file != umax)
-			{
-				// Found a file in the preferred image group
-				break;
-			}
-
-			continue;
-		}
-
-		if (path.empty() || !fs::get_stat(path, file_stat) || file_stat.is_directory)
-		{
-			continue;
-		}
-
-		if (max_file_size < file_stat.size)
-		{
-			max_file_size = file_stat.size;
-			index_of_largest_file = index;
-		}
-	}
-
-	if (index_of_largest_file == umax)
-	{
-		return {};
-	}
-
-	return testees.begin()[index_of_largest_file];
-}
-
 bool Emulator::BootRsxCapture(const std::string& path)
 {
 	if (m_state != system_state::stopped || m_restrict_emu_state_change)
@@ -1600,6 +1522,10 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 			g_backup_cfg.from_string(g_cfg.to_string());
 		}
 
+		// Get localized title
+		m_localized_title = std::string(psf::get_string(_psf, fmt::format("TITLE_%02d", static_cast<s32>(g_cfg.sys.language.get())), m_title));
+		sys_log.notice("Localized Title: %s", GetLocalizedTitle());
+
 		// Set RTM usage
 		g_use_rtm = utils::has_rtm() && (((utils::has_mpx() && !utils::has_tsx_force_abort()) && g_cfg.core.enable_TSX == tsx_usage::enabled) || g_cfg.core.enable_TSX == tsx_usage::forced);
 
@@ -2176,15 +2102,19 @@ game_boot_result Emulator::Load(const std::string& title_id, bool is_disc_patch,
 			{
 				sys_log.notice("Title was set from %s to %s", m_title, bdvd_title);
 				m_title = bdvd_title;
+
+				const auto localized_title = psf::get_string(disc_psf_obj, fmt::format("TITLE_%02d", static_cast<s32>(g_cfg.sys.language.get())), m_title);
+				if (m_localized_title != localized_title)
+				{
+					sys_log.notice("Localized Title was set from %s to %s", m_localized_title, localized_title);
+					m_localized_title = localized_title;
+				}
 			}
 		}
 
-		for (auto& c : m_title)
-		{
-			// Replace newlines with spaces
-			if (c == '\n')
-				c = ' ';
-		}
+		// Replace newlines with spaces
+		std::replace(m_title.begin(), m_title.end(), '\n', ' ');
+		std::replace(m_localized_title.begin(), m_localized_title.end(), '\n', ' ');
 
 		// Mount /host_root/ if necessary (special value)
 		if (g_cfg.vfs.host_root)
@@ -3899,7 +3829,7 @@ std::string Emulator::GetFormattedTitle(double fps) const
 {
 	rpcs3::title_format_data title_data;
 	title_data.format = g_cfg.misc.title_format.to_string();
-	title_data.title = GetTitle();
+	title_data.title = GetLocalizedTitle();
 	title_data.title_id = GetTitleID();
 	title_data.renderer = g_cfg.video.renderer.to_string();
 	title_data.vulkan_adapter = g_cfg.video.vk.adapter.to_string();

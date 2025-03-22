@@ -313,29 +313,25 @@ settings_dialog::settings_dialog(std::shared_ptr<gui_settings> gui_settings, std
 				if (!utils::has_mpx())
 				{
 					title = tr("Haswell/Broadwell TSX Warning");
-					message = tr(
-						R"(
-							<p style="white-space: nowrap;">
-								RPCS3 has detected that you are using TSX functions on a Haswell or Broadwell CPU.<br>
-								Intel has deactivated these functions in newer Microcode revisions, since they can lead to unpredicted behaviour.<br>
-								That means using TSX may break games or even <font color="red"><b>damage</b></font> your data.<br>
-								We recommend to disable this feature and update your computer BIOS.<br><br>
-								Do you wish to use TSX anyway?
-							</p>
-						)");
+					message = gui::utils::make_paragraph(tr(
+						"RPCS3 has detected that you are using TSX functions on a Haswell or Broadwell CPU.\n"
+						"Intel has deactivated these functions in newer Microcode revisions, since they can lead to unpredicted behaviour.\n"
+						"That means using TSX may break games or even <font color=\"red\"><b>damage</b></font> your data.\n"
+						"We recommend to disable this feature and update your computer BIOS.\n"
+						"\n"
+						"Do you wish to use TSX anyway?"
+					));
 				}
 				else
 				{
 					title = tr("TSX-FA Warning");
-					message = tr(
-						R"(
-							<p style="white-space: nowrap;">
-								RPCS3 has detected your CPU only supports TSX-FA.<br>
-								That means using TSX may break games or even <font color="red"><b>damage</b></font> your data.<br>
-								We recommend to disable this feature.<br><br>
-								Do you wish to use TSX anyway?
-							</p>
-						)");
+					message = gui::utils::make_paragraph(tr(
+						"RPCS3 has detected your CPU only supports TSX-FA.\n"
+						"That means using TSX may break games or even <font color=\"red\"><b>damage</b></font> your data.\n"
+						"We recommend to disable this feature.\n"
+						"\n"
+						"Do you wish to use TSX anyway?"
+					));
 				}
 
 				if (QMessageBox::No == QMessageBox::critical(this, title, message, QMessageBox::Yes, QMessageBox::No))
@@ -597,10 +593,6 @@ settings_dialog::settings_dialog(std::shared_ptr<gui_settings> gui_settings, std
 	m_emu_settings->EnhanceComboBox(ui->shaderPrecision, emu_settings_type::ShaderPrecisionQuality);
 	SubscribeTooltip(ui->gbShaderPrecision, tooltips.settings.shader_precision);
 
-	m_emu_settings->EnhanceComboBox(ui->shaderCompilerThreads, emu_settings_type::ShaderCompilerNumThreads, true);
-	SubscribeTooltip(ui->gb_shader_compiler_threads, tooltips.settings.shader_compiler_threads);
-	ui->shaderCompilerThreads->setItemText(ui->shaderCompilerThreads->findData(0), tr("Auto", "Number of Shader Compiler Threads"));
-
 	// Custom control that simplifies operation of two independent variables. Can probably be done better but this works.
 	ui->zcullPrecisionMode->addItem(tr("Precise (Slowest)"), static_cast<int>(zcull_precision_level::precise));
 	ui->zcullPrecisionMode->addItem(tr("Approximate (Fast)"), static_cast<int>(zcull_precision_level::approximate));
@@ -706,6 +698,12 @@ settings_dialog::settings_dialog(std::shared_ptr<gui_settings> gui_settings, std
 	shader_mode_bg->addButton(ui->rb_shader_interpreter_only, static_cast<int>(shader_mode::interpreter_only));
 
 	m_emu_settings->EnhanceRadioButton(shader_mode_bg, emu_settings_type::ShaderMode);
+
+	// Hide interpreter_only unless it is selected or the debug mode is active
+	if (!ui->rb_shader_interpreter_only->isChecked() && !m_gui_settings->GetValue(gui::m_showDebugTab).toBool())
+	{
+		ui->rb_shader_interpreter_only->setVisible(false);
+	}
 
 	// Sliders
 
@@ -1285,7 +1283,7 @@ settings_dialog::settings_dialog(std::shared_ptr<gui_settings> gui_settings, std
 	m_emu_settings->EnhanceCheckBox(ui->lockOverlayInputToPlayerOne, emu_settings_type::LockOvlIptToP1);
 	SubscribeTooltip(ui->lockOverlayInputToPlayerOne, tooltips.settings.lock_overlay_input_to_player_one);
 
-#if HAVE_SDL2
+#if HAVE_SDL3
 	m_emu_settings->EnhanceCheckBox(ui->loadSdlMappings, emu_settings_type::SDLMappings);
 	SubscribeTooltip(ui->loadSdlMappings, tooltips.settings.sdl_mappings);
 #else
@@ -1567,9 +1565,6 @@ settings_dialog::settings_dialog(std::shared_ptr<gui_settings> gui_settings, std
 	m_emu_settings->EnhanceCheckBox(ui->handleTiledMemory, emu_settings_type::HandleRSXTiledMemory);
 	SubscribeTooltip(ui->handleTiledMemory, tooltips.settings.handle_tiled_memory);
 
-	m_emu_settings->EnhanceCheckBox(ui->disableOnDiskShaderCache, emu_settings_type::DisableOnDiskShaderCache);
-	SubscribeTooltip(ui->disableOnDiskShaderCache, tooltips.settings.disable_on_disk_shader_cache);
-
 	m_emu_settings->EnhanceCheckBox(ui->vblankNTSCFixup, emu_settings_type::VBlankNTSCFixup);
 
 	ui->mfcDelayCommand->setChecked(m_emu_settings->GetSetting(emu_settings_type::MFCCommandsShuffling) == "1");
@@ -1590,6 +1585,9 @@ settings_dialog::settings_dialog(std::shared_ptr<gui_settings> gui_settings, std
 	m_emu_settings->EnhanceCheckBox(ui->disableAsyncHostMM, emu_settings_type::DisableAsyncHostMM);
 	SubscribeTooltip(ui->disableAsyncHostMM, tooltips.settings.disable_async_host_mm);
 
+	m_emu_settings->EnhanceCheckBox(ui->disableSpinOptimization, emu_settings_type::DisableSpinOptimization);
+	SubscribeTooltip(ui->disableSpinOptimization, tooltips.settings.disable_spin_optimization);
+
 	// Comboboxes
 
 	m_emu_settings->EnhanceComboBox(ui->maxSPURSThreads, emu_settings_type::MaxSPURSThreads, true);
@@ -1607,9 +1605,6 @@ settings_dialog::settings_dialog(std::shared_ptr<gui_settings> gui_settings, std
 
 	// Hide a developers' setting
 	remove_item(ui->FIFOAccuracy, static_cast<int>(rsx_fifo_mode::as_ps3), static_cast<int>(g_cfg.core.rsx_fifo_accuracy.def));
-
-	m_emu_settings->EnhanceComboBox(ui->vulkansched, emu_settings_type::VulkanAsyncSchedulerDriver);
-	SubscribeTooltip(ui->gb_vulkansched, tooltips.settings.vulkan_async_scheduler);
 
 	// Sliders
 
@@ -1800,7 +1795,11 @@ settings_dialog::settings_dialog(std::shared_ptr<gui_settings> gui_settings, std
 
 	m_emu_settings->EnhanceComboBox(ui->maxLLVMThreads, emu_settings_type::MaxLLVMThreads, true, true, utils::get_thread_count());
 	SubscribeTooltip(ui->gb_max_llvm, tooltips.settings.max_llvm_threads);
-	ui->maxLLVMThreads->setItemText(ui->maxLLVMThreads->findData(0), tr("All (%1)", "Max LLVM threads").arg(utils::get_thread_count()));
+	ui->maxLLVMThreads->setItemText(ui->maxLLVMThreads->findData(0), tr("All (%1)", "Max LLVM Compile Threads").arg(utils::get_thread_count()));
+
+	m_emu_settings->EnhanceComboBox(ui->shaderCompilerThreads, emu_settings_type::ShaderCompilerNumThreads, true);
+	SubscribeTooltip(ui->gb_shader_compiler_threads, tooltips.settings.shader_compiler_threads);
+	ui->shaderCompilerThreads->setItemText(ui->shaderCompilerThreads->findData(0), tr("Auto", "Max Shader Compile Threads"));
 
 	m_emu_settings->EnhanceComboBox(ui->perfOverlayDetailLevel, emu_settings_type::PerfOverlayDetailLevel);
 	SubscribeTooltip(ui->perf_overlay_detail_level, tooltips.settings.perf_overlay_detail_level);
@@ -2430,6 +2429,9 @@ settings_dialog::settings_dialog(std::shared_ptr<gui_settings> gui_settings, std
 	m_emu_settings->EnhanceCheckBox(ui->forceHwMSAAResolve, emu_settings_type::ForceHwMSAAResolve);
 	SubscribeTooltip(ui->forceHwMSAAResolve, tooltips.settings.force_hw_MSAA);
 
+	m_emu_settings->EnhanceCheckBox(ui->disableOnDiskShaderCache, emu_settings_type::DisableOnDiskShaderCache);
+	SubscribeTooltip(ui->disableOnDiskShaderCache, tooltips.settings.disable_on_disk_shader_cache);
+
 	// Checkboxes: core debug options
 	m_emu_settings->EnhanceCheckBox(ui->alwaysStart, emu_settings_type::StartOnBoot);
 	SubscribeTooltip(ui->alwaysStart, tooltips.settings.start_on_boot);
@@ -2480,6 +2482,9 @@ settings_dialog::settings_dialog(std::shared_ptr<gui_settings> gui_settings, std
 
 	m_emu_settings->EnhanceComboBox(ui->combo_num_ppu_threads, emu_settings_type::NumPPUThreads, true);
 	SubscribeTooltip(ui->gb_num_ppu_threads, tooltips.settings.num_ppu_threads);
+
+	m_emu_settings->EnhanceComboBox(ui->vulkansched, emu_settings_type::VulkanAsyncSchedulerDriver);
+	SubscribeTooltip(ui->gb_vulkansched, tooltips.settings.vulkan_async_scheduler);
 
 	if (!restoreGeometry(m_gui_settings->GetValue(gui::cfg_geometry).toByteArray()))
 	{

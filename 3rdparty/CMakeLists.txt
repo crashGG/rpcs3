@@ -79,13 +79,16 @@ else()
 		# we don't have the system libusb, so we compile from submodule
 		unset(LIBUSB_LIBRARIES CACHE)
 		add_subdirectory(libusb EXCLUDE_FROM_ALL)
+
+		if (NOT TARGET usb-1.0 AND TARGET usb-1.0-static)
+			add_library(usb-1.0 ALIAS usb-1.0-static)
+		endif()
 	endif()
 endif()
 
 
 # hidapi
 add_subdirectory(hidapi)
-
 
 # glslang
 add_subdirectory(glslang EXCLUDE_FROM_ALL)
@@ -99,23 +102,27 @@ add_subdirectory(yaml-cpp)
 
 # OpenGL
 
-find_package(OpenGL REQUIRED OPTIONAL_COMPONENTS EGL)
+if (NOT ANDROID)
+	find_package(OpenGL REQUIRED OPTIONAL_COMPONENTS EGL)
 
-add_library(3rdparty_opengl INTERFACE)
-target_include_directories(3rdparty_opengl INTERFACE GL)
+	add_library(3rdparty_opengl INTERFACE)
+	target_include_directories(3rdparty_opengl INTERFACE GL)
 
-if (WIN32)
-	if(NOT MSVC)
+	if (WIN32)
+		if(NOT MSVC)
+			target_link_libraries(3rdparty_opengl INTERFACE OpenGL::GL OpenGL::GLU)
+		else()
+			target_link_libraries(3rdparty_opengl INTERFACE dxgi.lib d2d1.lib dwrite.lib)
+		endif()
+	elseif(APPLE)
 		target_link_libraries(3rdparty_opengl INTERFACE OpenGL::GL OpenGL::GLU)
 	else()
-		target_link_libraries(3rdparty_opengl INTERFACE dxgi.lib d2d1.lib dwrite.lib)
+		target_link_libraries(3rdparty_opengl INTERFACE OpenGL::GL OpenGL::GLU OpenGL::GLX)
 	endif()
-elseif(APPLE)
-	target_link_libraries(3rdparty_opengl INTERFACE OpenGL::GL OpenGL::GLU)
 else()
-	target_link_libraries(3rdparty_opengl INTERFACE OpenGL::GL OpenGL::GLU OpenGL::GLX)
+	add_library(3rdparty_opengl INTERFACE)
+	target_compile_definitions(3rdparty_opengl INTERFACE WITHOUT_OPENGL=1)
 endif()
-
 
 # stblib
 add_subdirectory(stblib)
@@ -181,7 +188,7 @@ if(USE_VULKAN)
 		target_compile_definitions(3rdparty_vulkan INTERFACE -DHAVE_VULKAN)
 		target_link_libraries(3rdparty_vulkan INTERFACE Vulkan::Vulkan)
 
-		if(UNIX AND NOT APPLE)
+		if(UNIX AND NOT APPLE AND NOT ANDROID)
 			find_package(Wayland)
 			if (WAYLAND_FOUND)
 				target_include_directories(3rdparty_vulkan
@@ -205,21 +212,24 @@ endif()
 add_subdirectory(asmjit EXCLUDE_FROM_ALL)
 
 # OpenAL
-add_subdirectory(OpenAL EXCLUDE_FROM_ALL)
+if (NOT ANDROID)
+	add_subdirectory(OpenAL EXCLUDE_FROM_ALL)
+else()
+	add_library(3rdparty_openal INTERFACE)
+	target_compile_definitions(3rdparty_openal INTERFACE WITHOUT_OPENAL=1)
+endif()
 
 # FAudio
 set(FAUDIO_TARGET 3rdparty_dummy_lib)
 if(USE_FAUDIO)
-	# FAudio depends on SDL2
-	find_package(SDL2)
+	# FAudio depends on SDL3
+	find_package(SDL3)
 	if (USE_SYSTEM_FAUDIO)
-		if (NOT SDL2_FOUND OR SDL2_VERSION VERSION_LESS 2.0.12)
+		if (NOT SDL3_FOUND OR SDL3_VERSION VERSION_LESS 3.2.0)
 			message(WARNING
-				"RPCS3: System FAudio requires SDL 2.0.9 or newer. Please note, this warning"
-				"can also be displayed with SDL2 versions between 2.0.9-2.0.12, as the"
-				"CMake config files are not correctly installed. Since a valid SDL2"
-				">=2.0.9 version cannot be found, building with FAudio will be skipped.")
-			set(USE_FAUDIO OFF CACHE BOOL "Disabled using system FAudio with SDL < 2.0.12" FORCE)
+				"RPCS3: System FAudio requires SDL 3.2.0 or newer. Since a valid SDL3"
+				">=3.2.0 version cannot be found, building with FAudio will be skipped.")
+			set(USE_FAUDIO OFF CACHE BOOL "Disabled using system FAudio with SDL < 3.2.0" FORCE)
 		else()
 			message(STATUS "RPCS3: Using system FAudio")
 			find_package(FAudio REQUIRED CONFIGS FAudioConfig.cmake FAudio-config.cmake)
@@ -229,11 +239,11 @@ if(USE_FAUDIO)
 			set(FAUDIO_TARGET 3rdparty_FAudio)
 		endif()
 	else()
-		if (NOT SDL2_FOUND OR SDL2_VERSION VERSION_LESS 2.24.0)
+		if (NOT SDL3_FOUND OR SDL3_VERSION VERSION_LESS 3.2.0)
 			message(WARNING
-				"-- RPCS3: 3rdparty FAudio requires SDL 2.24.0 or newer. Since a valid SDL2"
-				">=2.24.0 version cannot be found, building with FAudio will be skipped.")
-			set(USE_FAUDIO OFF CACHE BOOL "Disabled FAudio with SDL < 2.24.0" FORCE)
+				"-- RPCS3: 3rdparty FAudio requires SDL 3.2.0 or newer. Since a valid SDL3"
+				">=3.2.0 version cannot be found, building with FAudio will be skipped.")
+			set(USE_FAUDIO OFF CACHE BOOL "Disabled FAudio with SDL < 3.2.0" FORCE)
 		else()
 			message(STATUS "RPCS3: Using builtin FAudio")
 			set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared library")
@@ -248,47 +258,52 @@ set_property(TARGET ${FAUDIO_TARGET} PROPERTY FOLDER "3rdparty/")
 
 
 # FFMPEG
-add_library(3rdparty_ffmpeg INTERFACE)
+if(NOT ANDROID)
+	add_library(3rdparty_ffmpeg INTERFACE)
 
-# Select the version of ffmpeg to use, default is builtin
-if(USE_SYSTEM_FFMPEG)
-	message(STATUS "RPCS3: using shared ffmpeg")
-	find_package(FFMPEG REQUIRED)
+	# Select the version of ffmpeg to use, default is builtin
+	if(USE_SYSTEM_FFMPEG)
+		message(STATUS "RPCS3: using shared ffmpeg")
+		find_package(FFMPEG REQUIRED)
 
-	target_include_directories(3rdparty_ffmpeg INTERFACE ${FFMPEG_INCLUDE_DIR})
-	target_link_libraries(3rdparty_ffmpeg INTERFACE ${FFMPEG_LIBRARIES})
-else()
-	message(STATUS "RPCS3: using builtin ffmpeg")
-	add_subdirectory(ffmpeg EXCLUDE_FROM_ALL)
-	# ffmpeg-core libraries are extracted to CMAKE_BINARY_DIR
-	set(FFMPEG_LIB_DIR "${CMAKE_BINARY_DIR}/3rdparty/ffmpeg/lib")
+		target_include_directories(3rdparty_ffmpeg INTERFACE ${FFMPEG_INCLUDE_DIR})
+		target_link_libraries(3rdparty_ffmpeg INTERFACE ${FFMPEG_LIBRARIES})
+	else()
+		message(STATUS "RPCS3: using builtin ffmpeg")
+		add_subdirectory(ffmpeg EXCLUDE_FROM_ALL)
+		# ffmpeg-core libraries are extracted to CMAKE_BINARY_DIR
+		set(FFMPEG_LIB_DIR "${CMAKE_BINARY_DIR}/3rdparty/ffmpeg/lib")
 
-	if (WIN32)
-		target_link_libraries(3rdparty_ffmpeg INTERFACE "Bcrypt.lib")
+		if (WIN32)
+			target_link_libraries(3rdparty_ffmpeg INTERFACE "Bcrypt.lib")
+		endif()
+
+		find_library(FFMPEG_LIB_AVFORMAT avformat PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
+		find_library(FFMPEG_LIB_AVCODEC avcodec PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
+		find_library(FFMPEG_LIB_AVUTIL avutil PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
+		find_library(FFMPEG_LIB_SWSCALE swscale PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
+		find_library(FFMPEG_LIB_SWRESAMPLE swresample PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
+
+		if (FFMPEG_LIB_AVFORMAT MATCHES "FFMPEG_LIB_AVFORMAT-NOTFOUND")
+			message(FATAL_ERROR "@#$%! FFMPEG NOT FOUND! ${FFMPEG_LIB_DIR}")
+		endif()
+
+		target_link_libraries(3rdparty_ffmpeg
+		INTERFACE
+			${FFMPEG_LIB_AVFORMAT}
+			${FFMPEG_LIB_AVCODEC}
+			${FFMPEG_LIB_AVUTIL}
+			${FFMPEG_LIB_SWSCALE}
+			${FFMPEG_LIB_SWRESAMPLE}
+		)
+		target_include_directories(3rdparty_ffmpeg INTERFACE "ffmpeg/include")
 	endif()
-
-	find_library(FFMPEG_LIB_AVFORMAT avformat PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
-	find_library(FFMPEG_LIB_AVCODEC avcodec PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
-	find_library(FFMPEG_LIB_AVUTIL avutil PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
-	find_library(FFMPEG_LIB_SWSCALE swscale PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
-	find_library(FFMPEG_LIB_SWRESAMPLE swresample PATHS ${FFMPEG_LIB_DIR} NO_DEFAULT_PATH)
-
-	target_link_libraries(3rdparty_ffmpeg
-	INTERFACE
-		${FFMPEG_LIB_AVFORMAT}
-		${FFMPEG_LIB_AVCODEC}
-		${FFMPEG_LIB_AVUTIL}
-		${FFMPEG_LIB_SWSCALE}
-		${FFMPEG_LIB_SWRESAMPLE}
-	)
-
-	target_include_directories(3rdparty_ffmpeg INTERFACE "ffmpeg/include")
 endif()
 
 
 # GLEW
 add_library(3rdparty_glew INTERFACE)
-if(NOT MSVC)
+if(NOT MSVC AND NOT ANDROID)
 	find_package(GLEW REQUIRED)
 	target_link_libraries(3rdparty_glew INTERFACE GLEW::GLEW)
 endif()
@@ -303,26 +318,26 @@ add_subdirectory(wolfssl EXCLUDE_FROM_ALL)
 # CURL
 add_subdirectory(curl EXCLUDE_FROM_ALL)
 
-# SDL2
-set(SDL2_TARGET 3rdparty_dummy_lib)
+# SDL3
+set(SDL3_TARGET 3rdparty_dummy_lib)
 if(USE_SDL)
 	if(USE_SYSTEM_SDL)
-		find_package(SDL2)
-		if(SDL2_FOUND AND NOT SDL2_VERSION VERSION_LESS 2.24.0)
-			message(STATUS "Using system SDL2")
-			add_library(3rdparty_sdl2 INTERFACE)
-			target_compile_definitions(3rdparty_sdl2 INTERFACE -DHAVE_SDL2=1)
-			target_link_libraries(3rdparty_sdl2 INTERFACE SDL2::SDL2)
-			set(SDL2_TARGET 3rdparty_sdl2)
+		find_package(SDL3)
+		if(SDL3_FOUND AND NOT SDL3_VERSION VERSION_LESS 3.2.0)
+			message(STATUS "Using system SDL3 version '${SDL3_VERSION}'")
+			add_library(3rdparty_sdl3 INTERFACE)
+			target_compile_definitions(3rdparty_sdl3 INTERFACE -DHAVE_SDL3=1)
+			target_link_libraries(3rdparty_sdl3 INTERFACE SDL3::SDL3)
+			set(SDL3_TARGET 3rdparty_sdl3)
 		else()
-			message(FATAL_ERROR "SDL2 is not available on this system")
+			message(FATAL_ERROR "SDL3 is not available on this system")
 		endif()
 	else()
-		message(STATUS "Using static SDL2 from 3rdparty")
-		add_library(3rdparty_sdl2 INTERFACE)
-		target_compile_definitions(3rdparty_sdl2 INTERFACE -DHAVE_SDL2=1)
+		message(STATUS "Using static SDL3 from 3rdparty")
+		add_library(3rdparty_sdl3 INTERFACE)
+		target_compile_definitions(3rdparty_sdl3 INTERFACE -DHAVE_SDL3=1)
 		add_subdirectory(libsdl-org EXCLUDE_FROM_ALL)
-		set(SDL2_TARGET 3rdparty_sdl2)
+		set(SDL3_TARGET 3rdparty_sdl3)
 	endif()
 endif()
 
@@ -365,7 +380,7 @@ add_library(3rdparty::glew ALIAS 3rdparty_glew)
 add_library(3rdparty::wolfssl ALIAS wolfssl)
 add_library(3rdparty::libcurl ALIAS 3rdparty_libcurl)
 add_library(3rdparty::soundtouch ALIAS soundtouch)
-add_library(3rdparty::sdl2 ALIAS ${SDL2_TARGET})
+add_library(3rdparty::sdl3 ALIAS ${SDL3_TARGET})
 add_library(3rdparty::miniupnpc ALIAS libminiupnpc-static)
 add_library(3rdparty::rtmidi ALIAS rtmidi)
 add_library(3rdparty::opencv ALIAS ${OPENCV_TARGET})

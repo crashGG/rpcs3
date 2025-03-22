@@ -1988,6 +1988,8 @@ namespace rsx
 
 	void thread::analyse_current_rsx_pipeline()
 	{
+		m_program_cache_hint.invalidate(m_graphics_state.load());
+
 		prefetch_vertex_program();
 		prefetch_fragment_program();
 	}
@@ -2003,6 +2005,9 @@ namespace rsx
 			}
 
 			m_graphics_state.clear(rsx::pipeline_state::xform_instancing_state_dirty);
+
+			// Emit invalidate here in case ucode is actually clean
+			m_program_cache_hint.invalidate_vertex_program(current_vertex_program);
 		}
 
 		if (!m_graphics_state.test(rsx::pipeline_state::vertex_program_dirty))
@@ -2032,6 +2037,8 @@ namespace rsx
 		}
 
 		current_vertex_program.texture_state.import(current_vp_texture_state, current_vp_metadata.referenced_textures_mask);
+
+		m_program_cache_hint.invalidate_vertex_program(current_vertex_program);
 	}
 
 	void thread::get_current_fragment_program(const std::array<std::unique_ptr<rsx::sampled_image_descriptor_base>, rsx::limits::fragment_textures_count>& sampler_descriptors)
@@ -2273,6 +2280,8 @@ namespace rsx
 				rsx_log.trace("FS exports depth component but depth test is disabled (INVALID_OPERATION)");
 			}
 		}
+
+		m_program_cache_hint.invalidate_fragment_program(current_fragment_program);
 	}
 
 	bool thread::invalidate_fragment_program(u32 dst_dma, u32 dst_offset, u32 size)
@@ -3149,7 +3158,7 @@ namespace rsx
 
 		// Reset current stats
 		m_frame_stats = {};
-		m_profiler.enabled = !!g_cfg.video.overlay;
+		m_profiler.enabled = !!g_cfg.video.debug_overlay;
 	}
 
 	f64 thread::get_cached_display_refresh_rate()

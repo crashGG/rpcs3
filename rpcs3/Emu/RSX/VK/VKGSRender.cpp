@@ -1912,7 +1912,11 @@ bool VKGSRender::load_program()
 
 		if (shadermode == shader_mode::interpreter_only)
 		{
-			m_program = m_shader_interpreter.get(m_pipeline_properties, current_fp_metadata);
+			m_program = m_shader_interpreter.get(
+				m_pipeline_properties,
+				current_fp_metadata,
+				current_vertex_program.ctrl,
+				current_fragment_program.ctrl);
 			return true;
 		}
 	}
@@ -1959,8 +1963,25 @@ bool VKGSRender::load_program()
 	{
 		vk::enter_uninterruptible();
 
+		if (g_cfg.video.debug_overlay)
+		{
+			m_frame_stats.program_cache_lookups_total += 2;
+			if (m_program_cache_hint.has_fragment_program())
+			{
+				m_frame_stats.program_cache_lookups_ellided++;
+			}
+			if (m_program_cache_hint.has_vertex_program())
+			{
+				m_frame_stats.program_cache_lookups_ellided++;
+			}
+		}
+
 		// Load current program from cache
-		std::tie(m_program, m_vertex_prog, m_fragment_prog) = m_prog_buffer->get_graphics_pipeline(vertex_program, fragment_program, m_pipeline_properties,
+		std::tie(m_program, m_vertex_prog, m_fragment_prog) = m_prog_buffer->get_graphics_pipeline(
+			&m_program_cache_hint,
+			vertex_program,
+			fragment_program,
+			m_pipeline_properties,
 			shadermode != shader_mode::recompiler, true, m_pipeline_layout);
 
 		vk::leave_uninterruptible();
@@ -1990,7 +2011,11 @@ bool VKGSRender::load_program()
 		// First load the next program if not available
 		if (!m_program)
 		{
-			m_program = m_shader_interpreter.get(m_pipeline_properties, current_fp_metadata);
+			m_program = m_shader_interpreter.get(
+				m_pipeline_properties,
+				current_fp_metadata,
+				current_vertex_program.ctrl,
+				current_fragment_program.ctrl);
 
 			// Program has changed, reupload
 			m_interpreter_state = rsx::invalidate_pipeline_bits;

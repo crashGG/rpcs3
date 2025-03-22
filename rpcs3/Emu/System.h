@@ -141,6 +141,7 @@ class Emulator final
 	std::string m_path_original;
 	std::string m_title_id;
 	std::string m_title;
+	std::string m_localized_title;
 	std::string m_app_version;
 	std::string m_hash;
 	std::string m_cat;
@@ -279,6 +280,11 @@ public:
 		return m_title;
 	}
 
+	const std::string& GetLocalizedTitle() const
+	{
+		return m_localized_title;
+	}
+
 	const std::string GetTitleAndTitleID() const
 	{
 		return m_title + (m_title_id.empty() ? "" : " [" + m_title_id + "]");
@@ -331,8 +337,6 @@ public:
 	}
 
 	void SetUsr(const std::string& user);
-
-	std::string GetBackgroundPicturePath() const;
 
 	u64 GetPauseTime() const
 	{
