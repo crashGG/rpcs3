@@ -30,7 +30,6 @@ DEP_URLS="         \
     $QT_TOOL_URL   \
     $QT_MM_URL     \
     $QT_SVG_URL    \
-#     $LLVMLIBS_URL  \
     $GLSLANG_URL   \
     $VULKAN_SDK_URL\
     $CCACHE_URL"
