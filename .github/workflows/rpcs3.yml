@@ -132,12 +132,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup NuGet
-        uses: nuget/setup-nuget@v2
-
-      - name: Restore NuGet packages
-        run: nuget restore rpcs3.sln
-
       - name: Setup env
         shell: pwsh
         run: |
@@ -162,9 +156,9 @@ jobs:
           restore-keys: ${{ runner.os }}-${{ env.COMPILER }}-
 
       - name: Install C++ Clang tools for Windows
-        shell: pwsh
+        shell: powershell
         run: |
-          choco install visualstudio2022enterprise -y --package-parameters "--add Microsoft.VisualStudio.Component.VC.ClangToolset.x64.x86"
+          choco install visualstudio2022-workload-vctools -y --package-parameters "--add Microsoft.VisualStudio.Component.VC.ClangToolset.x64.x86"
 
       - name: Download and unpack dependencies
         run: .ci/setup-windows.sh
@@ -182,7 +176,7 @@ jobs:
 
       - name: Compile RPCS3
         shell: pwsh
-        run: msbuild rpcs3.sln /p:Configuration=Release /v:minimal /p:Platform=x64 /p:PreferredToolArchitecture=x64 /p:CLToolPath=${{ env.CCACHE_BIN_DIR }} /p:UseMultiToolTask=true /p:CustomAfterMicrosoftCommonTargets="${{ github.workspace }}\buildfiles\msvc\ci_only.targets"
+        run: msbuild rpcs3.sln /p:Configuration=Release /v:minimal /p:Platform=x64 /p:CLToolPath=${{ env.CCACHE_BIN_DIR }} /p:UseMultiToolTask=true /p:CustomAfterMicrosoftCommonTargets="${{ github.workspace }}\buildfiles\msvc\ci_only.targets"
 
       - name: Run Unit Tests
         if: github.event_name == 'pull_request'
