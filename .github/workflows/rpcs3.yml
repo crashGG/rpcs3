@@ -109,7 +109,7 @@ jobs:
     name: RPCS3 Windows
     runs-on: windows-2025
     env:
-      COMPILER: msvc
+      COMPILER: clang
       QT_VER_MAIN: '6'
       QT_VER: '6.9.0'
       QT_VER_MSVC: 'msvc2022'
