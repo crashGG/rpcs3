@@ -161,6 +161,11 @@ jobs:
           key: "${{ runner.os }}-${{ env.COMPILER }}-${{ env.QT_VER }}-${{ env.VULKAN_SDK_SHA }}-${{ env.CCACHE_SHA }}-${{ hashFiles('llvm.lock') }}"
           restore-keys: ${{ runner.os }}-${{ env.COMPILER }}-
 
+      - name: Install C++ Clang tools for Windows
+        shell: pwsh
+        run: |
+          choco install visualstudio2022enterprise -y --package-parameters "--add Microsoft.VisualStudio.Component.VC.ClangToolset.x64.x86"
+
       - name: Download and unpack dependencies
         run: .ci/setup-windows.sh
 
